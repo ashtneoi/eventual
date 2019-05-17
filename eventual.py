@@ -73,6 +73,12 @@ class Event:
         self.timestamp = timestamp
         self.data = data
 
+    def __repr__(self):
+        return f"Event({self.timestamp!r}, {self.data!r})"
+
+    def __str__(self):
+        return f"{self.data!r} @ {self.timestamp}"
+
 
 class Actor:
     def __init__(self):
@@ -165,8 +171,8 @@ class Manager:
 
 
 t = Timer(1)
-a1 = Action(lambda x: print(f"1: {x.data}"))
-a2 = Action(lambda x: print(f"2: {x.data}"))
+a1 = Action(lambda x: print(f"1: {x}"))
+a2 = Action(lambda x: print(f"2: {x}"))
 b = Buffer(None)
 w = Watch()
 t.attach(expiration=a1.trigger)
