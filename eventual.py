@@ -35,10 +35,11 @@ class ValueOutput(Output):
     _port_type = 'Vo'
 
     def __call__(self, val):
-        self.prev_val = self.val
+        prev_val = self.val
         self.val = val
-        for d in self.down:
-            d(self.prev_val, self.val)
+        if prev_val != self.val:
+            for d in self.down:
+                d(prev_val, self.val)
 
 
 def value_input(f):
