@@ -16,21 +16,9 @@ class Output:
     def __init__(self):
         self.down = []
 
-    def attach(self, down):
+    def attach(self, _, down):
         self.down.append(down)
         down.__self__.up[down] = self
-
-
-class Input:
-    def __init__(self, f):
-        self.f = f
-
-    def attach(self, up):
-        self.up = up
-        up.down.append(self)
-
-    def __call__(self, thing):
-        self.f(thing)
 
 
 class EventOutput(Output):
@@ -42,9 +30,9 @@ class EventOutput(Output):
 
 
 def event_input(f):
-    def attach(self, up):
-        self.up = up
-        up.down.append(self)
+    def attach(me, up):
+        me.__self__.up[me] = up
+        up.down.append(me)
     f.attach = attach
     f._port_type = 'Ei'
     return f
@@ -60,8 +48,13 @@ class ValueOutput(Output):
             d(self.prev_val, self.val)
 
 
-class ValueInput(Input):
-    _port_type = 'Vi'
+def value_input(f):
+    def attach(me, up):
+        me.__self__.up[me] = up
+        up.down.append(me)
+    f.attach = attach
+    f._port_type = 'Vi'
+    return f
 
 
 class MutexPort:
@@ -98,7 +91,7 @@ class Actor:
             }[my_port._port_type]
             if peer_port_expected_type != peer_port._port_type:
                 raise Exception
-            my_port.attach(peer_port)
+            my_port.attach(my_port, peer_port)
 
 
 @outputs(
@@ -123,7 +116,6 @@ class Timer(Actor):
             + self.interval_sec
         )
         self.next_event_time_sec += advance_by
-        print(self.next_event_time_sec)
         self.mgr.scheduler.enterabs(
             self.next_event_time_sec,
             0,
@@ -150,7 +142,8 @@ class Manager:
 
 t = Timer(1)
 a = Action(lambda x: print(x))
-t.attach(expiration=a.trigger)
+# t.attach(expiration=a.trigger)
+a.attach(trigger=t.expiration)
 mgr = Manager()
 t.start(mgr)
 mgr.scheduler.run()
