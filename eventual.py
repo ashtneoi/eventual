@@ -3,15 +3,6 @@ import time
 from functools import wraps
 
 
-def outputs(**outs):
-    def dec(cls):
-        for name, out in outs.items():
-            assert not hasattr(cls, name)
-            setattr(cls, name, out)
-        return cls
-    return dec
-
-
 class Output:
     def __init__(self):
         self.down = []
@@ -81,8 +72,14 @@ class Event:
 
 
 class Actor:
+    started = False
+    out = {}
+
     def __init__(self):
         self.up = {}
+        for name, out in self.out.items():
+            assert not hasattr(self, name)
+            setattr(self, name, out())
 
     def attach(self, **connections):
         for my_port_name, peer_port in connections.items():
@@ -101,17 +98,25 @@ class Actor:
                 )
             my_port.attach(my_port, peer_port)
 
+    def start(self, mgr):
+        self.mgr = mgr
+        self.started = True
+        for name in self.out:
+            for d in getattr(self, name).down:
+                d.__self__.start(mgr)
 
-@outputs(
-    expiration=EventOutput(),
-)
+
 class Timer(Actor):
+    out = {
+        'expiration': EventOutput,
+    }
+
     def __init__(self, interval_sec):
         super().__init__()
         self.interval_sec = interval_sec
 
     def start(self, mgr):
-        self.mgr = mgr
+        super().start(mgr)
         self.next_event_time_sec = self.mgr.t0
         self.on_expire()
 
@@ -142,10 +147,11 @@ class Action(Actor):
         self.f(ev)
 
 
-@outputs(
-    val=ValueOutput(),
-)
 class Buffer(Actor):
+    out = {
+        'val': ValueOutput,
+    }
+
     def __init__(self, initial):
         super().__init__()
         self.val.val = initial
@@ -155,10 +161,11 @@ class Buffer(Actor):
         self.val(ev.data)
 
 
-@outputs(
-    new=EventOutput(),
-)
 class Watch(Actor):
+    out = {
+        'new': EventOutput,
+    }
+
     @value_input
     def val(self, _prev_val, val):
         self.new(Event(time.monotonic(), val))
