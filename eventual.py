@@ -29,11 +29,13 @@ class EventOutput(Output):
             d(ev)
 
 
+def input_attach(me, up):
+    me.__self__.up[me] = up
+    up.down.append(me)
+
+
 def event_input(f):
-    def attach(me, up):
-        me.__self__.up[me] = up
-        up.down.append(me)
-    f.attach = attach
+    f.attach = input_attach
     f._port_type = 'Ei'
     return f
 
@@ -49,10 +51,7 @@ class ValueOutput(Output):
 
 
 def value_input(f):
-    def attach(me, up):
-        me.__self__.up[me] = up
-        up.down.append(me)
-    f.attach = attach
+    f.attach = input_attach
     f._port_type = 'Vi'
     return f
 
@@ -70,9 +69,9 @@ class MutexPort:
 
 # TODO: What type is `timestamp`? Return type of `time.monotonic()`? `datetime`?
 class Event:
-    def __init__(self, timestamp, value):
+    def __init__(self, timestamp, data):
         self.timestamp = timestamp
-        self.value = value
+        self.data = data
 
 
 class Actor:
@@ -90,7 +89,10 @@ class Actor:
                 'M': 'M',
             }[my_port._port_type]
             if peer_port_expected_type != peer_port._port_type:
-                raise Exception
+                raise Exception(
+                    f"{my_port._port_type} port can't "
+                    f"connect to {peer_port._port_type} port"
+                )
             my_port.attach(my_port, peer_port)
 
 
@@ -134,6 +136,28 @@ class Action(Actor):
         self.f(ev)
 
 
+@outputs(
+    val=ValueOutput(),
+)
+class Buffer(Actor):
+    def __init__(self, initial):
+        super().__init__()
+        self.val.val = initial
+
+    @event_input
+    def event(self, ev):
+        self.val(ev.data)
+
+
+@outputs(
+    new=EventOutput(),
+)
+class Watch(Actor):
+    @value_input
+    def val(self, _prev_val, val):
+        self.new(Event(time.monotonic(), val))
+
+
 class Manager:
     def __init__(self):
         self.scheduler = sched.scheduler()
@@ -141,9 +165,14 @@ class Manager:
 
 
 t = Timer(1)
-a = Action(lambda x: print(x))
-# t.attach(expiration=a.trigger)
-a.attach(trigger=t.expiration)
+a1 = Action(lambda x: print(f"1: {x.data}"))
+a2 = Action(lambda x: print(f"2: {x.data}"))
+b = Buffer(None)
+w = Watch()
+t.attach(expiration=a1.trigger)
+b.attach(event=t.expiration)
+w.attach(val=b.val)
+a2.attach(trigger=w.new)
 mgr = Manager()
 t.start(mgr)
 mgr.scheduler.run()
