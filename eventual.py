@@ -48,15 +48,26 @@ def value_input(f):
     return f
 
 
-class MutexPort:
-    _port_type = 'M'
+def sync_port_attach(me, peer):
+    self.peer = peer
+    peer.peer = self
 
-    def __init__(self, f):
-        self.f = f
 
-    def attach(self, peer):
-        self.peer = peer
-        peer.peer = self
+def sync_port_val(me):
+    return me.want and me.peer.want
+
+
+def sync_port(f):
+    def sync_port_set(self, want):
+        prev_want = self.want
+        self.want = want
+        if prev_want != self.want:
+            self.peer.f()
+    sync_port_set.f = f
+    sync_port_set.attach = sync_port_attach
+    sync_port_set.val = sync_port_val
+    sync_port_set._port_type = 'S'
+    return sync_port_set
 
 
 # TODO: What type is `timestamp`? Return type of `time.monotonic()`? `datetime`?
@@ -90,7 +101,7 @@ class Actor:
                 'Ei': 'Eo',
                 'Vo': 'Vi',
                 'Vi': 'Vo',
-                'M': 'M',
+                'S': 'S',
             }[my_port._port_type]
             if peer_port_expected_type != peer_port._port_type:
                 raise Exception(
