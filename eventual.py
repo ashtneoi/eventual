@@ -169,6 +169,17 @@ class Timer(Actor):
         self.expiration(Event(time.monotonic(), None))  # TODO: timestamp type
 
 
+class LogEvent(Actor):
+    out = {
+        'event_out': EventOutput,
+    }
+
+    @event_input
+    def event_in(self, ev):
+        print(ev)
+        self.event_out(ev)
+
+
 class Action(Actor):
     def __init__(self, f):
         super().__init__()
@@ -275,10 +286,11 @@ class Manager:
 
 t = Timer(1)
 
-a = Action(lambda ev: Event(ev.timestamp, True))
+log = LogEvent()
+log.attach(event_in=t.expiration)
 
-r = RoundRobinMutex()
-r.add_port()
+a = Action(lambda ev: print('hi!'))
+a.attach(trigger=log.event_out)
 
 mgr = Manager()
 t.start(mgr)
