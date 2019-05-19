@@ -80,7 +80,7 @@ class EventOutputInstance(PortInstance):
         self.down = []
 
     def attach(self, down):
-        if not isinstance(up, EventInputInstance):
+        if not isinstance(down, EventInputInstance):
             raise Exception(
                 f"Can't connect {type(self)} to {type(up)}"
             )
