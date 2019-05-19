@@ -219,6 +219,9 @@ class Event:
         else:
             self.timestamp = timestamp
 
+    def __str__(self):
+        return f"{self.data!r} @ {self.timestamp:.2f}"
+
 
 class Manager:
     def __init__(self):
@@ -227,15 +230,21 @@ class Manager:
     def add(self, actor):
         self.actors.append(actor)
 
-    def poke(self):
+    def start(self):
+        self.scheduler = sched.scheduler()
+        self.t0 = time.monotonic()
         for actor in self.actors:
             actor.poke()
+
+    def run(self):
+        self.scheduler.run()
 
 
 class Actor:
     poked = False
 
     def __init__(self, mgr):
+        self.mgr = mgr
         mgr.add(self)
 
     def attach(self, **connections):
@@ -246,9 +255,47 @@ class Actor:
         if self.poked:
             return
         self.poked = True
-        for attr in self.__dict__.values():
+        for attr in tuple(self.__dict__.values()):
             if isinstance(attr, PortInstance):
                 attr.poke()
+
+
+class Timer(Actor):
+    trigger = EventOutput()
+
+    def __init__(self, mgr, interval_sec):
+        super().__init__(mgr)
+        self.interval_sec = interval_sec
+
+    def poke(self):
+        super().poke()
+        self.next_event_time_sec = self.mgr.t0
+        self.on_expire()
+
+    def on_expire(self):
+        # TODO: This may not cope well with very long OS/program uptime.
+        now = time.monotonic()
+        advance_by = (
+            ((now - self.next_event_time_sec) // self.interval_sec)
+            * self.interval_sec
+            + self.interval_sec
+        )
+        self.next_event_time_sec += advance_by
+        self.mgr.scheduler.enterabs(
+            self.next_event_time_sec,
+            0,
+            self.on_expire,
+        )
+        self.trigger(Event(None))
+
+
+class LogEvent(Actor):
+    event_out = EventOutput()
+
+    @event_input
+    def event_in(self, ev):
+        print(ev)
+        self.event_out(ev)
 
 
 class Test(unittest.TestCase):
@@ -268,7 +315,7 @@ class Test(unittest.TestCase):
         x = Thing(mgr)
         y = Thing(mgr)
         x.attach(hey=y.trigger)
-        mgr.poke()
+        mgr.start()
 
         self.assertEqual(x.a, 'nope')
         self.assertEqual(x.hey.val, 'nope')
@@ -296,7 +343,7 @@ class Test(unittest.TestCase):
         x = Thing(mgr)
         y = Thing(mgr)
         x.attach(hey=y.trigger)
-        mgr.poke()
+        mgr.start()
 
         self.assertEqual(x.a, 0)
         self.assertEqual(y.a, 0)
@@ -320,7 +367,7 @@ class Test(unittest.TestCase):
         x = Thing(mgr)
         y = Thing(mgr)
         x.attach(hey=y.hey)
-        mgr.poke()
+        mgr.start()
 
         self.assertFalse(x.hey.want)
         self.assertFalse(x.hey.val)
@@ -349,3 +396,12 @@ class Test(unittest.TestCase):
         self.assertTrue(y.hey.want)
         self.assertTrue(y.hey.val)
         self.assertEqual(y.a, True)
+
+
+if __name__ == '__main__':
+    mgr = Manager()
+    t = Timer(mgr, 2)
+    l = LogEvent(mgr)
+    t.attach(trigger=l.event_in)
+    mgr.start()
+    mgr.run()
