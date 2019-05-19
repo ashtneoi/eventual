@@ -149,10 +149,7 @@ class SyncInstance(PortInstance):
         self.f = f
 
         self.peer = None
-
-    def __call__(self, val):
-        if self.peer is not None:
-            self.peer.f(self.peer.actor, val)
+        self.want = False
 
     def attach(self, peer):
         if self.peer is not None:
@@ -167,6 +164,18 @@ class SyncInstance(PortInstance):
     def poke(self):
         if self.peer is not None:
             self.peer.actor.poke()
+
+    def __call__(self, want):
+        self.want = want
+        if self.peer is None:
+            raise Exception("Peer is not set")
+        self.peer.f(self.peer.actor, want)
+
+    @property
+    def val(self):
+        if self.peer is None:
+            raise Exception("Peer is not set")
+        return self.want and self.peer.want
 
 
 class Sync(Creator):
@@ -312,11 +321,30 @@ class Test(unittest.TestCase):
         x.attach(hey=y.hey)
         mgr.poke()
 
+        self.assertFalse(x.hey.want)
+        self.assertFalse(x.hey.val)
         self.assertEqual(x.a, 0)
+        self.assertFalse(y.hey.want)
+        self.assertFalse(y.hey.val)
         self.assertEqual(y.a, 0)
         x.hey(False)
+        self.assertFalse(x.hey.want)
+        self.assertFalse(x.hey.val)
         self.assertEqual(x.a, 0)
+        self.assertFalse(y.hey.want)
+        self.assertFalse(y.hey.val)
         self.assertEqual(y.a, False)
         y.hey(True)
+        self.assertFalse(x.hey.want)
+        self.assertFalse(x.hey.val)
         self.assertEqual(x.a, True)
+        self.assertTrue(y.hey.want)
+        self.assertFalse(y.hey.val)
         self.assertEqual(y.a, False)
+        x.hey(True)
+        self.assertTrue(x.hey.want)
+        self.assertTrue(x.hey.val)
+        self.assertEqual(x.a, True)
+        self.assertTrue(y.hey.want)
+        self.assertTrue(y.hey.val)
+        self.assertEqual(y.a, True)
