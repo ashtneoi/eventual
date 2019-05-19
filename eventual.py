@@ -11,7 +11,7 @@ class Creator:
 
 class PortInstance:
     def __repr__(self):
-        return f"<{self.__class__.__name__}: {self.name}>"
+        return f"<{type(self).__name__}: {self.name}>"
 
 
 class InputInstance(PortInstance):
@@ -121,6 +121,7 @@ class ValueOutputInstance(PortInstance):
         self.down.append(down)
 
     def __call__(self, val):
+        self.val = val
         for d in self.down:
             d.val = val
             d(val)
