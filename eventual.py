@@ -274,16 +274,19 @@ class Test(unittest.TestCase):
         class Thing(Actor):
             trigger = EventOutput()
 
-            def __init__(self):
+            def __init__(self, mgr):
+                super().__init__(mgr)
                 self.a = 0
 
             @event_input
             def hey(self, ev):
                 self.a = ev.data
 
-        x = Thing()
-        y = Thing()
+        mgr = Manager()
+        x = Thing(mgr)
+        y = Thing(mgr)
         x.attach(hey=y.trigger)
+        mgr.poke()
 
         self.assertEqual(x.a, 0)
         self.assertEqual(y.a, 0)
@@ -296,22 +299,24 @@ class Test(unittest.TestCase):
 
     def test_sync(self):
         class Thing(Actor):
-            def __init__(self):
+            def __init__(self, mgr):
                 self.a = 0
 
             @sync
             def hey(self, val):
                 self.a = val
 
-        x = Thing()
-        y = Thing()
+        mgr = Manager()
+        x = Thing(mgr)
+        y = Thing(mgr)
         x.attach(hey=y.hey)
+        mgr.poke()
 
         self.assertEqual(x.a, 0)
         self.assertEqual(y.a, 0)
-        x.hey(100)
+        x.hey(False)
         self.assertEqual(x.a, 0)
-        self.assertEqual(y.a, 100)
-        y.hey(200)
-        self.assertEqual(x.a, 200)
-        self.assertEqual(y.a, 100)
+        self.assertEqual(y.a, False)
+        y.hey(True)
+        self.assertEqual(x.a, True)
+        self.assertEqual(y.a, False)
