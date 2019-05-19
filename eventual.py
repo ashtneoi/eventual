@@ -9,8 +9,14 @@ class Creator:
         self.name = name
 
 
-class Input:
-    def __init__(self, actor, f):
+class PortInstance:
+    def __repr__(self):
+        return f"<{self.__class__.__name__}: {self.name}>"
+
+
+class InputInstance(PortInstance):
+    def __init__(self, name, actor, f):
+        self.name = name
         self.actor = actor
         self.f = f
 
@@ -19,8 +25,12 @@ class Input:
     def __call__(self, thing):
         self.f(self.actor, thing)
 
+    def poke(self):
+        if self.up is not None:
+            self.up.actor.poke()
 
-class EventInputInstance(Input):
+
+class EventInputInstance(InputInstance):
     def attach(self, up):
         if not isinstance(up, EventOutputInstance):
             raise Exception(
@@ -36,12 +46,12 @@ class EventInput(Creator):
 
     def __get__(self, instance, owner):
         # Create instance attribute to override us.
-        obj = EventInputInstance(instance, self.f)
+        obj = EventInputInstance(self.name, instance, self.f)
         setattr(instance, self.name, obj)
         return obj
 
 
-class ValueInputInstance(Input):
+class ValueInputInstance(InputInstance):
     def attach(self, up):
         if not isinstance(up, ValueOutputInstance):
             raise Exception(
@@ -57,13 +67,14 @@ class ValueInput(Creator):
 
     def __get__(self, instance, owner):
         # Create instance attribute to override us.
-        obj = ValueInputInstance(instance, self.f)
+        obj = ValueInputInstance(self.name, instance, self.f)
         setattr(instance, self.name, obj)
         return obj
 
 
-class EventOutputInstance:
-    def __init__(self, actor):
+class EventOutputInstance(PortInstance):
+    def __init__(self, name, actor):
+        self.name = name
         self.actor = actor
 
         self.down = []
@@ -80,17 +91,60 @@ class EventOutputInstance:
         for d in self.down:
             d(ev)
 
+    def poke(self):
+        for d in self.down:
+            d.actor.poke()
+
 
 class EventOutput(Creator):
     def __get__(self, instance, owner):
         # Create instance attribute to override us.
-        obj = EventOutputInstance(instance)
+        obj = EventOutputInstance(self.name, instance)
         setattr(instance, self.name, obj)
         return obj
 
 
-class SyncInstance:
-    def __init__(self, actor, f):
+class ValueOutputInstance(PortInstance):
+    def __init__(self, name, actor, initial):
+        self.name = name
+        self.actor = actor
+        self.initial = initial
+
+        self.down = []
+
+    def attach(self, down):
+        if not isinstance(up, ValueInputInstance):
+            raise Exception(
+                f"Can't connect {type(self)} to {type(up)}"
+            )
+        down.up = self
+        self.down.append(down)
+
+    def __call__(self, val):
+        for d in self.down:
+            d.val = val
+            d(val)
+
+    def poke(self):
+        self(self.initial)
+        for d in self.down:
+            d.actor.poke()
+
+
+class ValueOutput(Creator):
+    def __init__(self, initial):
+        self.initial = initial
+
+    def __get__(self, instance, owner):
+        # Create instance attribute to override us.
+        obj = ValueOutputInstance(self.name, instance, self.initial)
+        setattr(instance, self.name, obj)
+        return obj
+
+
+class SyncInstance(PortInstance):
+    def __init__(self, name, actor, f):
+        self.name = name
         self.actor = actor
         self.f = f
 
@@ -110,6 +164,10 @@ class SyncInstance:
         peer.peer = self
         self.peer = peer
 
+    def poke(self):
+        if self.peer is not None:
+            self.peer.actor.poke()
+
 
 class Sync(Creator):
     def __init__(self, f):
@@ -120,7 +178,7 @@ class Sync(Creator):
 
     def __get__(self, instance, owner):
         # Create instance attribute to override us.
-        obj = SyncInstance(instance, self.f)
+        obj = SyncInstance(self.name, instance, self.f)
         setattr(instance, self.name, obj)
         return obj
 
@@ -143,12 +201,6 @@ def sync(f):
     return e
 
 
-class Actor:
-    def attach(self, **connections):
-        for key, val in connections.items():
-            getattr(self, key).attach(val)
-
-
 class Event:
     def __init__(self, data, timestamp=None):
         self.data = data
@@ -158,7 +210,66 @@ class Event:
             self.timestamp = timestamp
 
 
+class Manager:
+    def __init__(self):
+        self.actors = []
+
+    def add(self, actor):
+        self.actors.append(actor)
+
+    def poke(self):
+        for actor in self.actors:
+            actor.poke()
+
+
+class Actor:
+    poked = False
+
+    def __init__(self, mgr):
+        mgr.add(self)
+
+    def attach(self, **connections):
+        for key, val in connections.items():
+            getattr(self, key).attach(val)
+
+    def poke(self):
+        if self.poked:
+            return
+        self.poked = True
+        for attr in self.__dict__.values():
+            if isinstance(attr, PortInstance):
+                attr.poke()
+
+
 class Test(unittest.TestCase):
+    def test_value_input_output(self):
+        class Thing(Actor):
+            trigger = ValueOutput('nope')
+
+            def __init__(self, mgr):
+                super().__init__(mgr)
+                self.a = 0
+
+            @value_input
+            def hey(self, val):
+                self.a = val
+
+        mgr = Manager()
+        x = Thing(mgr)
+        y = Thing(mgr)
+        x.attach(hey=y.trigger)
+        mgr.poke()
+
+        self.assertEqual(x.a, 'nope')
+        self.assertEqual(x.hey.val, 'nope')
+        self.assertEqual(y.a, 0)
+        x.trigger(100)
+        self.assertEqual(x.a, 'nope')
+        self.assertEqual(y.a, 0)
+        y.trigger(200)
+        self.assertEqual(x.a, 200)
+        self.assertEqual(y.a, 0)
+
     def test_event_input_output(self):
         class Thing(Actor):
             trigger = EventOutput()
