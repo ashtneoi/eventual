@@ -60,6 +60,10 @@ class ValueInputInstance(InputInstance):
         up.down.append(self)
         self.up = up
 
+    @property
+    def val(self):
+        return self.up.val
+
 
 class ValueInput(Creator):
     def __init__(self, f):
@@ -123,7 +127,6 @@ class ValueOutputInstance(PortInstance):
     def __call__(self, val):
         self.val = val
         for d in self.down:
-            d.val = val
             d(val)
 
     def poke(self):
