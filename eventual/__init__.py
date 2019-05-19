@@ -13,6 +13,9 @@ class PortInstance:
     def __repr__(self):
         return f"<{type(self).__name__}: {self.name}>"
 
+    def poke(self):
+        pass
+
 
 class InputInstance(PortInstance):
     def __init__(self, name, actor, f):
@@ -24,10 +27,6 @@ class InputInstance(PortInstance):
 
     def __call__(self, thing):
         self.f(self.actor, thing)
-
-    def poke(self):
-        if self.up is not None:
-            self.up.actor.poke()
 
 
 class EventInputInstance(InputInstance):
@@ -95,10 +94,6 @@ class EventOutputInstance(PortInstance):
         for d in self.down:
             d(ev)
 
-    def poke(self):
-        for d in self.down:
-            d.actor.poke()
-
 
 class EventOutput(Creator):
     def __get__(self, instance, owner):
@@ -130,9 +125,7 @@ class ValueOutputInstance(PortInstance):
             d(val)
 
     def poke(self):
-        self(self.initial)
-        for d in self.down:
-            d.actor.poke()
+        self.val = self.initial
 
 
 class ValueOutput(Creator):
@@ -164,10 +157,6 @@ class SyncInstance(PortInstance):
             )
         peer.peer = self
         self.peer = peer
-
-    def poke(self):
-        if self.peer is not None:
-            self.peer.actor.poke()
 
     def __call__(self, want):
         self.want = want
