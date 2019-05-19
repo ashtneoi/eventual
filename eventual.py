@@ -96,9 +96,9 @@ class SyncInstance:
 
         self.peer = None
 
-    def __call__(self, ev):
+    def __call__(self, val):
         if self.peer is not None:
-            self.peer.f(self.peer.actor, ev)
+            self.peer.f(self.peer.actor, val)
 
     def attach(self, peer):
         if self.peer is not None:
@@ -189,8 +189,8 @@ class Test(unittest.TestCase):
                 self.a = 0
 
             @sync
-            def hey(self, ev):
-                self.a = ev.data
+            def hey(self, val):
+                self.a = val
 
         x = Thing()
         y = Thing()
@@ -198,9 +198,9 @@ class Test(unittest.TestCase):
 
         self.assertEqual(x.a, 0)
         self.assertEqual(y.a, 0)
-        x.hey(Event(100))
+        x.hey(100)
         self.assertEqual(x.a, 0)
         self.assertEqual(y.a, 100)
-        y.hey(Event(200))
+        y.hey(200)
         self.assertEqual(x.a, 200)
         self.assertEqual(y.a, 100)
