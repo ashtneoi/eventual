@@ -309,14 +309,16 @@ class Test(unittest.TestCase):
         x.attach(hey=y.trigger)
         mgr.start()
 
-        self.assertEqual(x.a, 'nope')
+        self.assertEqual(x.a, 0)
         self.assertEqual(x.hey.val, 'nope')
         self.assertEqual(y.a, 0)
         x.trigger(100)
-        self.assertEqual(x.a, 'nope')
+        self.assertEqual(x.a, 0)
+        self.assertEqual(x.hey.val, 'nope')
         self.assertEqual(y.a, 0)
         y.trigger(200)
         self.assertEqual(x.a, 200)
+        self.assertEqual(x.hey.val, 200)
         self.assertEqual(y.a, 0)
 
     def test_event_input_output(self):
