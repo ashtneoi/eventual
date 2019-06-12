@@ -4,6 +4,10 @@ import unittest
 from functools import update_wrapper
 
 
+class PortNotConnected(Exception):
+    pass
+
+
 class Creator:
     def __set_name__(self, owner, name):
         self.name = name
@@ -38,6 +42,10 @@ class EventInputInstance(InputInstance):
         up.down.append(self)
         self.up = up
 
+    def detach(self):
+        self.up.down.remove(self)
+        self.up = None
+
 
 class EventInput(Creator):
     def __init__(self, f):
@@ -59,8 +67,14 @@ class ValueInputInstance(InputInstance):
         up.down.append(self)
         self.up = up
 
+    def detach(self):
+        self.up.down.remove(self)
+        self.up = None
+
     @property
     def val(self):
+        if self.up is None:
+            raise PortNotConnected
         return self.up.val
 
 
@@ -90,6 +104,11 @@ class EventOutputInstance(PortInstance):
         down.up = self
         self.down.append(down)
 
+    def detach(self):
+        for down in self.down:
+            down.up = None
+        self.down = []
+
     def __call__(self, ev):
         for d in self.down:
             d(ev)
@@ -112,12 +131,17 @@ class ValueOutputInstance(PortInstance):
         self.down = []
 
     def attach(self, down):
-        if not isinstance(up, ValueInputInstance):
+        if not isinstance(down, ValueInputInstance):
             raise Exception(
                 f"Can't connect {type(self)} to {type(up)}"
             )
         down.up = self
         self.down.append(down)
+
+    def detach(self):
+        for down in self.down:
+            down.up = None
+        self.down = []
 
     def __call__(self, val):
         self.val = val
@@ -158,16 +182,19 @@ class SyncInstance(PortInstance):
         peer.peer = self
         self.peer = peer
 
+    def detach(self):
+        self.peer.peer = None
+        self.peer = None
+
     def __call__(self, want):
         self.want = want
-        if self.peer is None:
-            raise Exception("Peer is not set")
-        self.peer.f(self.peer.actor, want)
+        if self.peer is not None:
+            self.peer.f(self.peer.actor, want)
 
     @property
     def val(self):
         if self.peer is None:
-            raise Exception("Peer is not set")
+            raise PortNotConnected
         return self.want and self.peer.want
 
 
@@ -252,7 +279,7 @@ class Actor:
                 attr.poke()
 
 
-class Timer(Actor):
+class IntervalTimer(Actor):
     trigger = EventOutput()
 
     def __init__(self, mgr, interval_sec):
@@ -391,10 +418,87 @@ class Test(unittest.TestCase):
         self.assertEqual(y.hey.val, True)
         self.assertEqual(y.a, True)
 
+    def test_detach(self):
+        class Thing(Actor):
+            s = 0
+            h = 0
+            g = 0
+
+            my_status = ValueOutput(None)
+            hello = EventOutput()
+
+            @value_input
+            def status(self, _val):
+                self.s += 1
+
+            @event_input
+            def hey(self, _ev):
+                self.h += 1
+
+            @sync
+            def go(self, _val):
+                self.g += 1
+
+        mgr = Manager()
+        x = Thing(mgr)
+        y = Thing(mgr)
+
+        with self.assertRaises(PortNotConnected):
+            x.go.val
+        with self.assertRaises(PortNotConnected):
+            y.status.val
+        with self.assertRaises(PortNotConnected):
+            y.go.val
+
+        x.attach(my_status=y.status)
+        x.attach(hello=y.hey)
+        x.attach(go=y.go)
+
+        self.assertEqual(y.s, 0)
+        self.assertEqual(y.h, 0)
+        self.assertEqual(y.g, 0)
+
+        x.my_status(10)
+        x.hello(Event("h"))
+        x.go(True)
+
+        self.assertEqual(y.status.val, 10)
+
+        self.assertEqual(y.s, 1)
+        self.assertEqual(y.h, 1)
+        self.assertEqual(y.g, 1)
+
+        x.my_status.detach()
+        x.hello.detach()
+        x.go.detach()
+
+        with self.assertRaises(PortNotConnected):
+            x.go.val
+        with self.assertRaises(PortNotConnected):
+            y.status.val
+        with self.assertRaises(PortNotConnected):
+            y.go.val
+
+        x.attach(my_status=y.status)
+        x.attach(hello=y.hey)
+        x.attach(go=y.go)
+
+        self.assertEqual(y.s, 1)
+        self.assertEqual(y.h, 1)
+        self.assertEqual(y.g, 1)
+
+        x.my_status(20)
+        x.hello(Event("h"))
+        x.go(False)
+
+        self.assertEqual(y.s, 2)
+        self.assertEqual(y.h, 2)
+        self.assertEqual(y.g, 2)
+
 
 if __name__ == '__main__':
     mgr = Manager()
-    t = Timer(mgr, 2)
+    t = IntervalTimer(mgr, 2)
     l = LogEvent(mgr)
     t.attach(trigger=l.event_in)
     mgr.start()
