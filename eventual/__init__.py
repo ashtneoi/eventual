@@ -36,7 +36,9 @@ class EventInputInstance(InputInstance):
 
     def detach(self):
         self.up.down.remove(self)
+        self.up.actor.after_detach(self.up)
         self.up = None
+        self.actor.after_detach(self)
 
 
 class EventInput(Creator):
@@ -56,7 +58,9 @@ class ValueInputInstance(InputInstance):
 
     def detach(self):
         self.up.down.remove(self)
+        self.up.actor.after_detach(self.up)
         self.up = None
+        self.actor.after_detach(self)
 
     @property
     def val(self):
@@ -94,7 +98,9 @@ class EventOutputInstance(PortInstance):
     def detach(self):
         for down in self.down:
             down.up = None
+            down.actor.after_detach(down)
         self.down = []
+        self.actor.after_detach(self)
 
     def __call__(self, ev):
         for d in self.down:
@@ -129,7 +135,9 @@ class ValueOutputInstance(PortInstance):
     def detach(self):
         for down in self.down:
             down.up = None
+            down.actor.after_detach(down)
         self.down = []
+        self.actor.after_detach(self)
 
     def __call__(self, val):
         self.val = val
@@ -171,7 +179,9 @@ class SyncInstance(PortInstance):
 
     def detach(self):
         self.peer.peer = None
+        self.peer.actor.after_detach(self.peer)
         self.peer = None
+        self.actor.after_detach(self)
 
     def __call__(self, want):
         self.want = want
@@ -249,6 +259,9 @@ class Actor:
     def attach(self, **connections):
         for key, val in connections.items():
             getattr(self, key).attach(val)
+
+    def after_detach(self, _port):
+        pass
 
 
 class IntervalTimer(Actor):
