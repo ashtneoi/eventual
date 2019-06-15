@@ -17,9 +17,6 @@ class PortInstance:
     def __repr__(self):
         return f"<{type(self).__name__}: {self.name}>"
 
-    def poke(self):
-        pass
-
 
 class InputInstance(PortInstance):
     def __init__(self, name, actor, f):
@@ -126,7 +123,7 @@ class ValueOutputInstance(PortInstance):
     def __init__(self, name, actor, initial):
         self.name = name
         self.actor = actor
-        self.initial = initial
+        self.val = initial
 
         self.down = []
 
@@ -147,9 +144,6 @@ class ValueOutputInstance(PortInstance):
         self.val = val
         for d in self.down:
             d(val)
-
-    def poke(self):
-        self.val = self.initial
 
 
 class ValueOutput(Creator):
@@ -245,23 +239,16 @@ class Event:
 class Manager:
     def __init__(self):
         self.actors = []
+        self.scheduler = sched.scheduler()
 
     def add(self, actor):
         self.actors.append(actor)
-
-    def start(self):
-        self.scheduler = sched.scheduler()
-        self.t0 = time.monotonic()
-        for actor in self.actors:
-            actor.poke()
 
     def run(self):
         self.scheduler.run()
 
 
 class Actor:
-    poked = False
-
     def __init__(self, mgr):
         self.mgr = mgr
         mgr.add(self)
@@ -270,36 +257,23 @@ class Actor:
         for key, val in connections.items():
             getattr(self, key).attach(val)
 
-    def poke(self):
-        if self.poked:
-            return
-        self.poked = True
-        for attr in tuple(self.__dict__.values()):
-            if isinstance(attr, PortInstance):
-                attr.poke()
-
 
 class IntervalTimer(Actor):
     trigger = EventOutput()
+    active = ValueOutput(False)
 
     def __init__(self, mgr, interval_sec):
         super().__init__(mgr)
         self.interval_sec = interval_sec
 
-    def poke(self):
-        super().poke()
-        self.next_event_time_sec = self.mgr.t0
+    @event_input
+    def start(self, ev):
+        self.active(True)
         self.on_expire()
 
     def on_expire(self):
         # TODO: This may not cope well with very long OS/program uptime.
-        now = time.monotonic()
-        advance_by = (
-            ((now - self.next_event_time_sec) // self.interval_sec)
-            * self.interval_sec
-            + self.interval_sec
-        )
-        self.next_event_time_sec += advance_by
+        self.next_event_time_sec = time.monotonic() + self.interval_sec
         self.mgr.scheduler.enterabs(
             self.next_event_time_sec,
             0,
@@ -334,7 +308,6 @@ class Test(unittest.TestCase):
         x = Thing(mgr)
         y = Thing(mgr)
         x.attach(hey=y.trigger)
-        mgr.start()
 
         self.assertEqual(x.a, 0)
         self.assertEqual(x.hey.val, 'nope')
@@ -364,7 +337,6 @@ class Test(unittest.TestCase):
         x = Thing(mgr)
         y = Thing(mgr)
         x.attach(hey=y.trigger)
-        mgr.start()
 
         self.assertEqual(x.a, 0)
         self.assertEqual(y.a, 0)
@@ -388,7 +360,6 @@ class Test(unittest.TestCase):
         x = Thing(mgr)
         y = Thing(mgr)
         x.attach(hey=y.hey)
-        mgr.start()
 
         self.assertEqual(x.hey.want, False)
         self.assertEqual(x.hey.val, False)
@@ -501,5 +472,5 @@ if __name__ == '__main__':
     t = IntervalTimer(mgr, 2)
     l = LogEvent(mgr)
     t.attach(trigger=l.event_in)
-    mgr.start()
+    t.start(Event(None))
     mgr.run()
