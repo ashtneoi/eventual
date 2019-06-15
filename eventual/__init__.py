@@ -275,7 +275,7 @@ class IntervalTimer(Actor):
 
     @value_input
     def active(self, val):
-        if val is True:
+        if val:
             if self.next_event is None:
                 self.next_event_time_sec = time.monotonic()
                 self._on_expire()
