@@ -265,7 +265,6 @@ class IntervalTimer(Actor):
         self.on_expire()
 
     def on_expire(self):
-        # TODO: This may not cope well with very long OS/program uptime.
         self.next_event_time_sec = time.monotonic() + self.interval_sec
         self.mgr.scheduler.enterabs(
             self.next_event_time_sec,
