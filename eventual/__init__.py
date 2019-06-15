@@ -253,6 +253,7 @@ class Actor:
 
 class IntervalTimer(Actor):
     trigger = EventOutput()
+    late = EventOutput()
 
     def __init__(self, mgr, interval_sec):
         super().__init__(mgr)
@@ -275,6 +276,7 @@ class IntervalTimer(Actor):
         self.next_event_time_sec += self.interval_sec
         if self.next_event_time_sec < now:
             self.next_event_time_sec = now + self.interval_sec
+            self.late(Event(None, now))
         self.next_event = self.mgr.scheduler.enterabs(
             self.next_event_time_sec,
             0,
