@@ -32,12 +32,7 @@ class InputInstance(PortInstance):
 
 class EventInputInstance(InputInstance):
     def attach(self, up):
-        if not isinstance(up, EventOutputInstance):
-            raise Exception(
-                f"Can't connect {type(self)} to {type(up)}"
-            )
-        up.down.append(self)
-        self.up = up
+        up.attach(self)
 
     def detach(self):
         self.up.down.remove(self)
@@ -57,12 +52,7 @@ class EventInput(Creator):
 
 class ValueInputInstance(InputInstance):
     def attach(self, up):
-        if not isinstance(up, ValueOutputInstance):
-            raise Exception(
-                f"Can't connect {type(self)} to {type(up)}"
-            )
-        up.down.append(self)
-        self.up = up
+        up.attach(self)
 
     def detach(self):
         self.up.down.remove(self)
@@ -134,6 +124,7 @@ class ValueOutputInstance(PortInstance):
             )
         down.up = self
         self.down.append(down)
+        down(self.val)
 
     def detach(self):
         for down in self.down:
@@ -168,13 +159,15 @@ class SyncInstance(PortInstance):
 
     def attach(self, peer):
         if self.peer is not None:
-            raise Exception("Can only attach once")
+            raise Exception("Port is already connected")
         if not isinstance(peer, SyncInstance):
             raise Exception(
                 f"Can't connect {type(self)} to {type(peer)}"
             )
         peer.peer = self
         self.peer = peer
+        peer(self.want)
+        self(peer.want)
 
     def detach(self):
         self.peer.peer = None
@@ -309,11 +302,11 @@ class Test(unittest.TestCase):
         y = Thing(mgr)
         x.attach(hey=y.trigger)
 
-        self.assertEqual(x.a, 0)
+        self.assertEqual(x.a, 'nope')
         self.assertEqual(x.hey.val, 'nope')
         self.assertEqual(y.a, 0)
         x.trigger(100)
-        self.assertEqual(x.a, 0)
+        self.assertEqual(x.a, 'nope')
         self.assertEqual(x.hey.val, 'nope')
         self.assertEqual(y.a, 0)
         y.trigger(200)
@@ -425,9 +418,9 @@ class Test(unittest.TestCase):
         x.attach(hello=y.hey)
         x.attach(go=y.go)
 
-        self.assertEqual(y.s, 0)
+        self.assertEqual(y.s, 1)
         self.assertEqual(y.h, 0)
-        self.assertEqual(y.g, 0)
+        self.assertEqual(y.g, 1)
 
         x.my_status(10)
         x.hello(Event("h"))
@@ -435,9 +428,9 @@ class Test(unittest.TestCase):
 
         self.assertEqual(y.status.val, 10)
 
-        self.assertEqual(y.s, 1)
+        self.assertEqual(y.s, 2)
         self.assertEqual(y.h, 1)
-        self.assertEqual(y.g, 1)
+        self.assertEqual(y.g, 2)
 
         x.my_status.detach()
         x.hello.detach()
@@ -454,17 +447,17 @@ class Test(unittest.TestCase):
         x.attach(hello=y.hey)
         x.attach(go=y.go)
 
-        self.assertEqual(y.s, 1)
+        self.assertEqual(y.s, 3)
         self.assertEqual(y.h, 1)
-        self.assertEqual(y.g, 1)
+        self.assertEqual(y.g, 3)
 
         x.my_status(20)
         x.hello(Event("h"))
         x.go(False)
 
-        self.assertEqual(y.s, 2)
+        self.assertEqual(y.s, 4)
         self.assertEqual(y.h, 2)
-        self.assertEqual(y.g, 2)
+        self.assertEqual(y.g, 4)
 
 
 if __name__ == '__main__':
