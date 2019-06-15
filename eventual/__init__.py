@@ -253,23 +253,32 @@ class Actor:
 
 class IntervalTimer(Actor):
     trigger = EventOutput()
-    active = ValueOutput(False)
 
     def __init__(self, mgr, interval_sec):
         super().__init__(mgr)
         self.interval_sec = interval_sec
+        self.next_event = None
 
-    @event_input
-    def start(self, ev):
-        self.active(True)
-        self.on_expire()
+    @value_input
+    def active(self, val):
+        if val is True:
+            if self.next_event is None:
+                self.next_event_time_sec = time.monotonic()
+                self._on_expire()
+        else:
+            if self.next_event is not None:
+                self.mgr.scheduler.cancel(self.next_event)
+                self.next_event = None
 
-    def on_expire(self):
-        self.next_event_time_sec = time.monotonic() + self.interval_sec
-        self.mgr.scheduler.enterabs(
+    def _on_expire(self):
+        now = time.monotonic()
+        self.next_event_time_sec += self.interval_sec
+        if self.next_event_time_sec < now:
+            self.next_event_time_sec = now + self.interval_sec
+        self.next_event = self.mgr.scheduler.enterabs(
             self.next_event_time_sec,
             0,
-            self.on_expire,
+            self._on_expire,
         )
         self.trigger(Event(None))
 
@@ -464,5 +473,5 @@ if __name__ == '__main__':
     t = IntervalTimer(mgr, 2)
     l = LogEvent(mgr)
     t.attach(trigger=l.event_in)
-    t.start(Event(None))
+    t.active(True)
     mgr.run()
