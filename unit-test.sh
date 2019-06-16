@@ -1,1 +1,1 @@
-python3 -munittest eventual
+python3 -munittest discover -p '*.py' "$@" eventual
