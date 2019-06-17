@@ -481,12 +481,3 @@ class Test(unittest.TestCase):
         self.assertEqual(y.s, 4)
         self.assertEqual(y.h, 2)
         self.assertEqual(y.g, 4)
-
-
-if __name__ == '__main__':
-    mgr = Manager()
-    t = IntervalTimer(mgr, 2)
-    l = LogEvent(mgr)
-    t.attach(trigger=l.event_in)
-    t.active(True)
-    mgr.run()
