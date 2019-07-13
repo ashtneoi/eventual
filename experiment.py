@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from eventual import (
-    Manager,
+from eventual import Manager
+from eventual.actors import (
     IntervalTimer,
     LogEvent,
 )

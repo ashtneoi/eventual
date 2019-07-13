@@ -1,14 +1,59 @@
+import time
 import unittest
 
 from eventual import (
     Actor,
     event_input,
+    Event,
     EventOutput,
     Manager,
     sync,
     value_input,
     ValueOutput,
 )
+
+
+class IntervalTimer(Actor):
+    trigger = EventOutput()
+    late = EventOutput()
+
+    def __init__(self, mgr, interval_sec):
+        super().__init__(mgr)
+        self.interval_sec = interval_sec
+        self.next_event = None
+
+    @value_input
+    def active(self, val):
+        if val:
+            if self.next_event is None:
+                self.next_event_time_sec = time.monotonic()
+                self._on_expire()
+        else:
+            if self.next_event is not None:
+                self.mgr.scheduler.cancel(self.next_event)
+                self.next_event = None
+
+    def _on_expire(self):
+        now = time.monotonic()
+        self.next_event_time_sec += self.interval_sec
+        if self.next_event_time_sec < now:
+            self.next_event_time_sec = now + self.interval_sec
+            self.late(Event(None, now))
+        self.next_event = self.mgr.scheduler.enterabs(
+            self.next_event_time_sec,
+            0,
+            self._on_expire,
+        )
+        self.trigger(Event(None))
+
+
+class LogEvent(Actor):
+    event_out = EventOutput()
+
+    @event_input
+    def event_in(self, ev):
+        print(ev)
+        self.event_out(ev)
 
 
 class _RoundRobinMutexChild(Actor):
