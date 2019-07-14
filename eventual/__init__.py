@@ -264,6 +264,19 @@ class Actor:
         pass
 
 
+class ActorWithChildren(Actor):
+    child_type = Actor
+
+    def __init__(self, mgr):
+        super().__init__(mgr)
+        self.children = []
+
+    def attach_child(self, **connections):
+        child = self.child_type(self.mgr, parent=self)
+        self.children.append(child)
+        return child.attach(**connections)
+
+
 class Test(unittest.TestCase):
     def test_value_input_output(self):
         class Thing(Actor):

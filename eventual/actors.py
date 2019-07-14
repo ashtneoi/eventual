@@ -3,6 +3,7 @@ import unittest
 
 from eventual import (
     Actor,
+    ActorWithChildren,
     event_input,
     Event,
     EventOutput,
@@ -70,20 +71,15 @@ class _RoundRobinMutexChild(Actor):
         self.parent.mutex(self, want)
 
 
-class RoundRobinMutex(Actor):
+class RoundRobinMutex(ActorWithChildren):
+    child_type = _RoundRobinMutexChild
+
     locked = ValueOutput(False)
     pos = 0  # When locked: current holder.
 
-    def __init__(self, mgr):
-        super().__init__(mgr)
-        self.children = []
-
-    def attach_child(self, **connections):
-        child = _RoundRobinMutexChild(self.mgr, self)
-        self.children.append(child)
-        return child.attach(**connections)
-
     def after_detach_child(self, child):
+        # TODO: This is inefficient with lots of children. Children should know
+        # their own indices.
         i = self.children.index(child)
 
         if self.locked.val and child.mutex.want:
